@@ -1,0 +1,12 @@
+name = "chat"
+main = "worker.js"
+compatibility_date = "2023-12-01"
+
+[durable_objects]
+bindings = [
+  { name = "chat_room", class_name = "ChatRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRoom"]

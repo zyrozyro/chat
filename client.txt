@@ -1,0 +1,186 @@
+urla = new URL(window.location.href);
+roomid = urla.searchParams.get("room") || "main";
+if (urla.searchParams.get("hidden")) hiddenroom = true;
+else hiddenroom = false;
+document.getElementById("hi").innerHTML = roomid;
+document.getElementById("title").innerHTML = roomid;
+
+username = "";
+while (!username) {
+  username = prompt("username:");
+}
+const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(protocol + "//" + location.host);
+
+// timestamps and images
+let showtimestamps = false;
+let currentimagedata = null;
+
+document.getElementById("toggletimestamps").addEventListener("click", () => {
+  showtimestamps = !showtimestamps;
+  document.getElementById("toggletimestamps").textContent = 
+    showtimestamps ? "hide timestamps" : "show timestamps";
+  
+  const timestamps = document.querySelectorAll(".timestamp");
+  timestamps.forEach(ts => {
+    ts.style.display = showtimestamps ? "inline" : "none";
+  });
+});
+
+function formattimestamp(isoString) {
+  const date = new Date(isoString);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return hours + ':' + minutes;
+}
+
+function isimageURL(text) {
+  const imagepattern = /\.(jpg|jpeg|png|gif|webp|bmp)$/i;
+  try {
+    const url = new URL(text);
+    return imagepattern.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+document.getElementById("fileinput").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    currentimagedata = e.target.result;
+    const preview = document.getElementById("imagepreview");
+    preview.src = currentimagedata;
+    preview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+});
+
+function send() {
+  const input = document.getElementById("msg");
+  const message = input.value.trim();
+
+  if (!message && !currentimagedata) return;
+
+  const payload = {
+    type: "message",
+    roomid: roomid
+  };
+  if (message && isimageURL(message)) {
+    payload.message = "";
+    payload.imageURL = message;
+  } else payload.message = message;
+
+  if (currentimagedata) {
+    payload.imagedata = currentimagedata;
+  }
+
+  ws.send(JSON.stringify(payload));
+
+  input.value = "";
+  currentimagedata = null;
+  document.getElementById("imagepreview").style.display = "none";
+  document.getElementById("fileinput").value = "";
+}
+
+document.getElementById("sendbutton").addEventListener("click", send);
+
+
+document.getElementById("msg").addEventListener("keypress", (e) => {
+  if (e.key === "Enter") send();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && currentimagedata) {
+    currentimagedata = null;
+    document.getElementById("imagepreview").style.display = "none";
+    document.getElementById("fileinput").value = "";
+  }
+});
+
+ws.onopen = () => {
+  console.log("connected to websocket");
+  ws.send(JSON.stringify({
+    type: "join",
+    username: username,
+    roomid: roomid,
+    hiddenroom: hiddenroom
+  }));
+};
+
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+  const chat = document.getElementById("chat");
+
+  const messagediv = document.createElement("div");
+  messagediv.className = "message";
+
+  if (data.type === "chat") {
+    let timestamphtml = data.timestamp 
+      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
+      : '';
+
+    messagediv.innerHTML = timestamphtml + data.username + ": " + data.message;
+
+    if (data.imageURL) {
+      const img = document.createElement("img");
+      img.src = data.imageURL;
+      img.className = "chat-image";
+      img.onclick = () => window.open(data.imageURL, '_blank');
+      messagediv.appendChild(img);
+    } else if (data.imagedata) {
+      const img = document.createElement("img");
+      img.src = data.imagedata;
+      img.className = "chat-image";
+      img.onclick = () => window.open(data.imagedata, '_blank');
+      messagediv.appendChild(img);
+    }
+
+    chat.appendChild(messagediv);
+  } else if (data.type === "action") {
+    let timestamphtml = data.timestamp 
+      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
+      : '';
+
+    messagediv.className = "action";
+    messagediv.innerHTML = timestamphtml + data.username + " " + data.message;
+    chat.appendChild(messagediv);
+  } else if (data.type === "whisper") {
+    let timestamphtml = data.timestamp 
+      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
+      : '';
+
+    messagediv.className = "whisper";
+    messagediv.innerHTML = timestamphtml + data.message;
+    chat.appendChild(messagediv);
+  } else if (data.type === "system") {
+    let timestamphtml = data.timestamp 
+      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
+      : '';
+
+    messagediv.className = "system";
+    messagediv.innerHTML = timestamphtml + data.message;
+    chat.appendChild(messagediv);
+  } else if (data.type === "private") {
+    let timestamphtml = data.timestamp 
+      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
+      : '';
+
+    messagediv.className = "private";
+    messagediv.innerHTML = timestamphtml + data.message;
+    chat.appendChild(messagediv);
+  }
+};
+
+ws.onerror = (error) => {
+  console.error('WebSocket error:', error);
+};
+
+ws.onclose = () => {
+  console.log("disconnected from websocket");
+  const messagediv = document.createElement("div");
+  messagediv.className = "system";
+  messagediv.innerHTML = username + " left " + roomid;
+  document.getElementById("chat").appendChild(messagediv);
+};
