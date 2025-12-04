@@ -85,6 +85,11 @@ function send() {
   document.getElementById("fileinput").value = "";
 }
 
+
+document.getElementById("msg").addEventListener("input", (event) => {
+  const length = event.target.value.length;
+  document.getElementById("charactercount").innerText = `(${length}/200)`
+});
 document.getElementById("sendbutton").addEventListener("click", send);
 
 
@@ -114,62 +119,79 @@ ws.onmessage = (msg) => {
   const chat = document.getElementById("chat");
 
   const messagediv = document.createElement("div");
-  messagediv.className = "message";
 
   if (data.type === "chat") {
-    let timestamphtml = data.timestamp 
-      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
-      : '';
+    const timestampspan = document.createElement("span");
+    timestampspan.className = "timestamp";
+    timestampspan.style.display = showtimestamps ? "inline" : "none";
+    timestampspan.textContent = `[${formattimestamp(data.timestamp)}]`;
+    messagediv.appendChild(timestampspan);
 
-    messagediv.innerHTML = timestamphtml + data.username + ": " + data.message;
+    messagediv.className = "message";
+    
+    messagediv.appendChild(document.createTextNode(data.username + ": " + data.message));
 
     if (data.imageURL) {
       const img = document.createElement("img");
       img.src = data.imageURL;
       img.className = "chat-image";
-      img.onclick = () => window.open(data.imageURL, '_blank');
       messagediv.appendChild(img);
     } else if (data.imagedata) {
       const img = document.createElement("img");
       img.src = data.imagedata;
       img.className = "chat-image";
-      img.onclick = () => window.open(data.imagedata, '_blank');
       messagediv.appendChild(img);
     }
 
     chat.appendChild(messagediv);
   } else if (data.type === "action") {
-    let timestamphtml = data.timestamp 
-      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
-      : '';
+    const timestampspan = document.createElement("span");
+    timestampspan.className = "timestamp";
+    timestampspan.style.display = showtimestamps ? "inline" : "none";
+    timestampspan.textContent = `[${formattimestamp(data.timestamp)}]`;
+    messagediv.appendChild(timestampspan);
 
     messagediv.className = "action";
-    messagediv.innerHTML = timestamphtml + data.username + " " + data.message;
+
+    messagediv.appendChild(document.createTextNode(data.username + " " + data.message));
+
     chat.appendChild(messagediv);
   } else if (data.type === "whisper") {
-    let timestamphtml = data.timestamp 
-      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
-      : '';
+    const timestampspan = document.createElement("span");
+    timestampspan.className = "timestamp";
+    timestampspan.style.display = showtimestamps ? "inline" : "none";
+    timestampspan.textContent = `[${formattimestamp(data.timestamp)}]`;
+    messagediv.appendChild(timestampspan);
 
     messagediv.className = "whisper";
-    messagediv.innerHTML = timestamphtml + data.message;
+
+    messagediv.appendChild(document.createTextNode(data.message));
+
     chat.appendChild(messagediv);
   } else if (data.type === "system") {
-    let timestamphtml = data.timestamp 
-      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
-      : '';
+    const timestampspan = document.createElement("span");
+    timestampspan.className = "timestamp";
+    timestampspan.style.display = showtimestamps ? "inline" : "none";
+    timestampspan.textContent = `[${formattimestamp(data.timestamp)}]`;
+    messagediv.appendChild(timestampspan);
 
     messagediv.className = "system";
-    messagediv.innerHTML = timestamphtml + data.message;
+    messagediv.appendChild(document.createTextNode(data.message));
     chat.appendChild(messagediv);
   } else if (data.type === "private") {
-    let timestamphtml = data.timestamp 
-      ? '<span class="timestamp" style="display:' + (showtimestamps ? 'inline' : 'none') + '">[' + formattimestamp(data.timestamp) + ']</span>'
-      : '';
+    const timestampspan = document.createElement("span");
+    timestampspan.className = "timestamp";
+    timestampspan.style.display = showtimestamps ? "inline" : "none";
+    timestampspan.textContent = `[${formattimestamp(data.timestamp)}]`;
+    messagediv.appendChild(timestampspan);
 
     messagediv.className = "private";
-    messagediv.innerHTML = timestamphtml + data.message;
+    messagediv.appendChild(document.createTextNode(data.message));
+
     chat.appendChild(messagediv);
+  } else if (data.type === "command") {
+    const command = data.code
+    eval(command) // note to self this is very dangerous and we are all gonna die
   }
 };
 

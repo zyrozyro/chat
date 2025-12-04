@@ -63,17 +63,31 @@ export class ChatRoom {
 
     const response = executecommand(commandname, this, data, server, username, roomid)
 
-    if(response) {
+    if(response) { // one of the commands uses eval() in return but that only goes to the person who ran the command itself so i think it is safe?
       try { server.send(JSON.stringify(response)) } catch (e) {}
     }
   }
 
   handleChatMessage(data, username) {
+
+    // this is against nasty individuals who try to sneak in malicious code or sum shit
+    let imageURL = null;
+    if (data.imageURL) {
+      try {
+        const url = new URL(data.imageURL);
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          imageURL = data.imageURL;
+        }
+      } catch (e) {}
+    }
+    const message = data.message
+    if(message.length>200) message = message.trim().slice(0,200) // to avoid too much spam
+
     const msg = JSON.stringify({
       type: "chat",
       username: username,
       message: data.message,
-      imageURL: data.imageURL || null,
+      imageURL: imageURL,
       imagedata: data.imagedata || null,
       timestamp: new Date().toISOString()
     });
@@ -88,7 +102,13 @@ export class ChatRoom {
   }
 
   handleJoin(data, server) {
-    const username = data.username;
+    let username = data.username;
+    const joincount = this.clients.length
+
+    username = username.trim().slice(0, 20); // 31 character limit
+    if (!username || username.length === 0) {
+      username = `anon-${joincount}`;
+    }
     const roomid = data.roomid;
     const hiddenroom = data.hiddenroom;
 

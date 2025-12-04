@@ -7,15 +7,24 @@
     .chat-image { max-width: 400px; }
     .action { color: #9370DB; font-style: italic; }
     .whisper { color: #FF69B4; }
+    .changelog {
+      background-color: #DE9D50;
+      border-style: solid;
+      border-color: black;
+      border-width: 1px;
+      height: 100px;
+      overflow-y: scroll;
+    }
+    .charactercount { color: #808080; }
   </style>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
   <h1 id="hi"></h1>
-  <p>version 2.0 added image support & toggleable timestamps<br>version 3.0 fixed timestamps + added hidden rooms + added commands (help, count, me, whisper)<br>im gonna try to work on a /clear command, better /help command, command descriptions to work properly and something so that people stop breaking stuff with weird usernames and messages >:(, and joining other rooms using a command? wait idk thats gonna be pretty hard with how ive coded stuff rn gimi a break twin, i also need to make a proper changelog object and need to add this to github</p>
+  <p class="changelog">version 2.0 added image support & toggleable timestamps<br>version 3.0 fixed timestamps + added hidden rooms + added commands (help, count, me, whisper)<br>im gonna try to work on a /clear command, better /help command, command descriptions to work properly and something so that people stop breaking stuff with weird usernames and messages >:(, and joining other rooms using a command? wait idk thats gonna be pretty hard with how ive coded stuff rn gimi a break twin, i also need to make a proper changelog object and need to add this to github<br>version 4.0 fixed clear command added command descriptions added checks for usernames and messages added project to github</p>
   <button id="toggletimestamps">show timestamps</button>
   <div id="chat"></div>
-  <input id="msg" placeholder="type message..." />
+  <span id="charactercount">0/200</span><input id="msg" placeholder="type message..." />
   <button id="sendbutton">Send</button>
   <input type="file" id="fileinput" accept="image/*">
   <img style="max-width: 100px" id="imagepreview" />
