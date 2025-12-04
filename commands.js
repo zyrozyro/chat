@@ -3,7 +3,7 @@ export const commands = {
     description: "gives list of commands or description of command, () means optional argument [] means required; usage /help (command)",
     run: (chatRoom, data, server, username, roomid) => { 
       const parts = data.message.slice(6).trim().split(" ");
-      if(parts.length>0) {
+      if(!parts) {
         const commandname = parts[0];
         if(!commands[commandname]) {
           return {
@@ -20,11 +20,12 @@ export const commands = {
         }
       }
       
-      const commandlist = Object.keys(commands).join(", ");
+      const commandnames = Object.keys(commands)
+      const commandlist = commandnames.join(", ")
 
       return {
         type: "private",
-        message: `available commands: ${commandlist} (${commandlist.length})`,
+        message: `available commands: ${commandlist} (${commandnames.length})`,
         timestamp: new Date().toISOString()
       };
     }

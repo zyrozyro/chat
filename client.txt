@@ -83,6 +83,7 @@ function send() {
   currentimagedata = null;
   document.getElementById("imagepreview").style.display = "none";
   document.getElementById("fileinput").value = "";
+  document.getElementById("charactercount").innerText = "0/200"
 }
 
 

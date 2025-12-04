@@ -80,13 +80,13 @@ export class ChatRoom {
         }
       } catch (e) {}
     }
-    const message = data.message
+    let message = data.message
     if(message.length>200) message = message.trim().slice(0,200) // to avoid too much spam
 
     const msg = JSON.stringify({
       type: "chat",
       username: username,
-      message: data.message,
+      message: message,
       imageURL: imageURL,
       imagedata: data.imagedata || null,
       timestamp: new Date().toISOString()
