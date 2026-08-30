@@ -190,9 +190,8 @@ ws.onmessage = (msg) => {
     messagediv.appendChild(document.createTextNode(data.message));
 
     chat.appendChild(messagediv);
-  } else if (data.type === "command") {
-    const command = data.code
-    eval(command) // note to self this is very dangerous and we are all gonna die
+  } else if (data.type === "clearchat") {
+    document.getElementById('chat').innerHTML = '';
   }
 };
 
@@ -204,6 +203,6 @@ ws.onclose = () => {
   console.log("disconnected from websocket");
   const messagediv = document.createElement("div");
   messagediv.className = "system";
-  messagediv.innerHTML = username + " left " + roomid;
+  messagediv.appendChild(document.createTextNode(username + " left " + roomid));
   document.getElementById("chat").appendChild(messagediv);
 };

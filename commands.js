@@ -136,8 +136,7 @@ export const commands = {
     description: "clears your current chat history (you can also just do ctrl + r man); usage: /clear",
     run: (chatRoom, data, server, username, roomid) => {
       return {
-        type: "command", // is always private for now
-        code: `document.getElementById('chat').innerHTML=''`
+        type: "clearchat"
       };
     }
   }
