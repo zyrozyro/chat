@@ -1,6 +1,6 @@
 import { commandexists, executecommand } from './commands.js';
 
-const COOLDOWN = 500; // (ms) time between messages per client
+const COOLDOWN = 500; // (ms) time between messages per client 
 const MAXCLIENTSPERROOM = 10;
 
 // fat cock
