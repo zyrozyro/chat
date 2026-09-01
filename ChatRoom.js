@@ -1,4 +1,8 @@
 import { commandexists, executecommand } from './commands.js';
+
+const COOLDOWN = 500; // (ms) time between messages per client
+const MAXCLIENTSPERROOM = 10;
+
 // fat cock
 export class ChatRoom {
   constructor(state, env) {
@@ -7,10 +11,42 @@ export class ChatRoom {
     this.clients = [];
   }
 
+  getRegistryStub() {
+    const id = this.env.global_registry.idFromName("global");
+    return this.env.global_registry.get(id);
+  }
+  async registryIncrement() {
+    const stub = this.getRegistryStub();
+    await stub.fetch("https://registry/", {
+      method: "POST",
+      body: JSON.stringify({ action: "increment" })
+    });
+  }
+  async registryDecrement() {
+    const stub = this.getRegistryStub();
+    await stub.fetch("https://registry/", {
+      method: "POST",
+      body: JSON.stringify({ action: "decrement" })
+    });
+  }
+  async getGlobalUserCount() {
+    const stub = this.getRegistryStub();
+    const res = await stub.fetch("https://registry/", {
+      method: "POST",
+      body: JSON.stringify({ action: "get" })
+    });
+    const data = await res.json();
+    return data.count;
+  }
+
   async fetch(request) {
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 426 });
+      return new Response('expected WebSocket', { status: 426 });
+    }
+
+    if (this.clients.length >= MAXCLIENTSPERROOM) {
+      return new Response("room full", { status: 503});
     }
 
     const [client, server] = Object.values(new WebSocketPair());
@@ -19,17 +55,27 @@ export class ChatRoom {
     let username = null;
     let roomid = null;
     let hiddenroom = null;
-    this.clients.push({ socket: server, username: null, roomid: null, hiddenroom: null });
+    this.clients.push({ socket: server, username: null, roomid: null, hiddenroom: null, lastMessageTime: 0 });
 
-    server.addEventListener("message", evt => {
+    server.addEventListener("message", async evt => {
       const data = JSON.parse(evt.data);
 
       if (data.type === "message") {
+        const clientObj = this.clients.find(c => c.socket === server);
+        if (clientObj) {
+          const now = Date.now();
+          if (now - clientObj.lastMessageTime < COOLDOWN) {
+            return;
+          }
+          clientObj.lastMessageTime = now;
+        }
+
+
         if(data.message && data.message.startsWith("/")) {
-          this.handlecommand(data, server, username, roomid)
+          await this.handlecommand(data, server, username, roomid)
         } else this.handleChatMessage(data, username);
       } else if (data.type === "join") {
-        const result = this.handleJoin(data, server);
+        const result = await this.handleJoin(data, server);
         username = result.username;
         roomid = result.roomid;
         hiddenroom = result.hiddenroom;
@@ -46,7 +92,7 @@ export class ChatRoom {
     });
   }
 
-  handlecommand(data, server, username, roomid) {
+  async handlecommand(data, server, username, roomid) {
     const message = data.message.trim();
     const parts = message.slice(1).split(" ");
     const commandname = parts[0].toLowerCase();
@@ -61,7 +107,7 @@ export class ChatRoom {
       return;
     }
 
-    const response = executecommand(commandname, this, data, server, username, roomid)
+    const response = await executecommand(commandname, this, data, server, username, roomid, MAXCLIENTSPERROOM)
 
     if(response) { // one of the commands uses eval() in return but that only goes to the person who ran the command itself so i think it is safe?
       try { server.send(JSON.stringify(response)) } catch (e) {}
@@ -81,14 +127,21 @@ export class ChatRoom {
       } catch (e) {}
     }
     let message = data.message
-    if(message.length>200) message = message.trim().slice(0,200) // to avoid too much spam
+    if(message.length>200) message = message.trim().slice(0,200) // server side message length limit
+
+    // base64 is ~33% bigger than the raw bytes it encodes
+    const MAX_IMAGE_BASE64_LENGTH = 1000 * 1024 * 1.4;
+    let imagedata = data.imagedata || null;
+    if (imagedata && imagedata.length > MAX_IMAGE_BASE64_LENGTH) {
+      imagedata = null;
+    }
 
     const msg = JSON.stringify({
       type: "chat",
       username: username,
       message: message,
       imageURL: imageURL,
-      imagedata: data.imagedata || null,
+      imagedata: imagedata,
       timestamp: new Date().toISOString()
     });
 
@@ -101,12 +154,12 @@ export class ChatRoom {
     }
   }
 
-  handleJoin(data, server) {
+  async handleJoin(data, server) {
     let username = data.username;
     const joincount = this.clients.length
 
     username = username.trim().slice(0, 20); // 31 character limit
-    if (!username || username.length === 0) {
+    if (!username || username.length === 0 || username.includes("<") || username.includes(">")) {
       username = `anon-${joincount}`;
     }
     const roomid = data.roomid;
@@ -117,11 +170,13 @@ export class ChatRoom {
       clientObj.username = username;
       clientObj.roomid = roomid;
       clientObj.hiddenroom = hiddenroom;
+      clientObj.registered = true;
     }
 
-    // send private message with online users
-    //this.sendOnlineUsers(server, roomid);
-    server.send(JSON.stringify(executecommand("count", this, data, server, username, roomid)))
+    await this.registryIncrement();
+
+    console.log(username + " joined")
+    server.send(JSON.stringify(await executecommand("count", this, data, server, username, roomid, MAXCLIENTSPERROOM)))
 
     // broadcast join message
     const joinroomid = hiddenroom ? "[hidden]" : roomid;
@@ -140,29 +195,13 @@ export class ChatRoom {
     return { username, roomid, hiddenroom };
   }
 
-  sendOnlineUsers(server, roomid) {
-    let on = [];
-    for (let c of this.clients) {
-      let displayName = c.username;
-      if (c.roomid === roomid) { 
-        displayName = displayName + "*";
-      }
-      on.push(displayName); 
+  async handleDisconnect(server, username, roomid, hiddenroom) {
+    const clientObj = this.clients.find(c => c.socket === server);
+    if (clientObj && clientObj.registered) {
+      await this.registryDecrement();
     }
 
-    const returntext = "currently online: " + on.toString() + " (" + on.length + ")";
-    const msg = JSON.stringify({
-      type: "private",
-      message: returntext,
-      timestamp: new Date().toISOString()
-    });
-
-    try { 
-      server.send(msg);
-    } catch (e) {}
-  }
-
-  handleDisconnect(server, username, roomid, hiddenroom) {
+    console.log(username + " left")
     const leftroomid = hiddenroom ? "[hidden]" : roomid;
     const msg = JSON.stringify({
       type: "system",

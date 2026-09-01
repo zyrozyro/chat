@@ -1,9 +1,9 @@
 export const commands = {
   help: {
     description: "gives list of commands or description of command, () means optional argument [] means required; usage /help (command)",
-    run: (chatRoom, data, server, username, roomid) => { 
+    run: (chatRoom, data, server, username, roomid, MAX) => { 
       const parts = data.message.slice(6).trim().split(" ");
-      if(!parts) {
+      if(parts[0]) {
         const commandname = parts[0];
         if(!commands[commandname]) {
           return {
@@ -33,15 +33,14 @@ export const commands = {
 
   count: {
     description: "counts the users connected to your room, and the total users; usage: /count",
-    run: (chatRoom, data, server, username, roomid) => {
+    run: async (chatRoom, data, server, username, roomid, MAX) => {
       const usersinroom = chatRoom.clients
-        .filter(c => c.roomid === roomid && c.username)
         .map(c => c.username);
-      const totalusers = chatRoom.clients.length
+      const totalusers = await chatRoom.getGlobalUserCount(); 
       
       return {
         type: "private",
-        message: `users in this room: ${usersinroom.join(", ")} (${usersinroom.length}), (${totalusers} total)`,
+        message: `users in this room: ${usersinroom.join(", ")} (${usersinroom.length}/${MAX}), (${totalusers} total)`,
         timestamp: new Date().toISOString()
       };
     }
@@ -50,8 +49,8 @@ export const commands = {
 
   me: {
     description: "lets you do an action; usage: /me [action]",
-    run: (chatRoom, data, server, username, roomid) => {
-      const action = data.message.slice(4).trim(); // remove "/me " from the message
+    run: (chatRoom, data, server, username, roomid, MAX) => {
+      let action = data.message.slice(4).trim(); // remove "/me " from the message
       
       if (!action) {
         return {
@@ -60,6 +59,8 @@ export const commands = {
           timestamp: new Date().toISOString()
         };
       }
+
+      if(action.length > 200) action = action.slice(0, 200);
 
       // broadcast in italics
       const msg = JSON.stringify({
@@ -83,10 +84,10 @@ export const commands = {
 
   whisper: {
     description: "sends a private message to someone in your room; usage: /whisper [user] [message]",
-    run: (chatRoom, data, server, username, roomid) => {
+    run: (chatRoom, data, server, username, roomid, MAX) => {
       const parts = data.message.slice(9).trim().split(" ");
       const targetUsername = parts[0];
-      const message = parts.slice(1).join(" ");
+      let message = parts.slice(1).join(" ");
 
       if (!targetUsername || !message) {
         return {
@@ -95,6 +96,7 @@ export const commands = {
           timestamp: new Date().toISOString()
         };
       }
+      if(message.length > 200) message = message.slice(0, 200);
 
       const targetClient = chatRoom.clients.find(c => c.username === targetUsername); // test what happens if 2 people share same username
       
@@ -134,9 +136,31 @@ export const commands = {
 
   clear: {
     description: "clears your current chat history (you can also just do ctrl + r man); usage: /clear",
-    run: (chatRoom, data, server, username, roomid) => {
+    run: (chatRoom, data, server, username, roomid, MAX) => {
       return {
         type: "clearchat"
+      };
+    }
+  },
+
+  join: {
+    description: "moves you to a different room; usage: /join [roomid] [hidden]",
+    run: async (chatRoom, data, server, username, roomid, MAX) => {
+      const targetroom = data.message.split(" ")[1];
+      if(!targetroom) {
+        return {
+          type: "private",
+          message: "usage: /join [roomid]",
+          timestamp: new Date().toISOString()
+        }
+      }
+      let hidden = data.message.split(" ")[2]
+      if(!hidden) hidden = ""  
+      return {
+        type: "redirect",
+        hidden: hidden,
+        roomid: targetroom,
+        timestamp: new Date().toISOString()
       };
     }
   }
@@ -150,8 +174,8 @@ export function commandexists(name) {
 }
 
 // helper function to execute a command
-export function executecommand(name, chatRoom, data, server, username, roomid) {
-  if (!commandexists(name)) { return null } // double check to make sure haha
-  
-  return commands[name].run(chatRoom, data, server, username, roomid);
+export async function executecommand(name, chatRoom, data, server, username, roomid, MAX) {
+  if (!commandexists(name)) return null // double check to make sure haha
+
+  return await commands[name].run(chatRoom, data, server, username, roomid, MAX);
 }

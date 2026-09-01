@@ -5,12 +5,13 @@ else hiddenroom = false;
 document.getElementById("hi").innerHTML = roomid;
 document.getElementById("title").innerHTML = roomid;
 
-username = "";
+username = sessionStorage.getItem("chat_username");;
 while (!username) {
   username = prompt("username:");
 }
+sessionStorage.setItem("chat_username", username);
 const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(protocol + "//" + location.host);
+const ws = new WebSocket(protocol + "//" + location.host + "/?room=" + encodeURIComponent(roomid));
 
 // timestamps and images
 let showtimestamps = false;
@@ -31,7 +32,8 @@ function formattimestamp(isoString) {
   const date = new Date(isoString);
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
-  return hours + ':' + minutes;
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  return hours + ':' + minutes + ':' + seconds;
 }
 
 function isimageURL(text) {
@@ -47,6 +49,11 @@ function isimageURL(text) {
 document.getElementById("fileinput").addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > 1000 * 1024) {
+    alert("image is must be under 1MB");
+    event.target.value = "";
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -192,11 +199,18 @@ ws.onmessage = (msg) => {
     chat.appendChild(messagediv);
   } else if (data.type === "clearchat") {
     document.getElementById('chat').innerHTML = '';
+  } else if (data.type === "redirect") {
+    window.location.href = location.pathname + "?room=" + encodeURIComponent(data.roomid) + "&hidden=" + data.hidden;
   }
 };
 
-ws.onerror = (error) => {
+ws.onerror = (error) => { // can this check for error codes
   console.error('WebSocket error:', error);
+  console.log('this room appears to be full, join a new one by adding "?room=...." to the url')
+  const messagediv = document.createElement("div");
+  messagediv.className = "system";
+  messagediv.appendChild(document.createTextNode('this room appears to be full, join a new one by adding "?room=...." to the url'));
+  document.getElementById("chat").appendChild(messagediv);
 };
 
 ws.onclose = () => {

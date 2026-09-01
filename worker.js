@@ -1,8 +1,9 @@
 import { ChatRoom } from "./ChatRoom.js";
+import { GlobalRegistry } from "./registry.js";
 import HTML from "./index.html";
 import ClientJS from "./client.txt?raw"
 
-export { ChatRoom };
+export { ChatRoom, GlobalRegistry };
 
 export default {
   async fetch(request, env) {
@@ -16,7 +17,7 @@ export default {
 
     const upgradeHeader = request.headers.get('Upgrade');
     
-    // If it's a websocket request, pass it to the Durable Object
+    // if it's a websocket request, pass it to the Durable Object
     if (upgradeHeader === "websocket") {
       const roomid = url.searchParams.get("room") || "main";
       const id = env.chat_room.idFromName(roomid);
@@ -24,7 +25,7 @@ export default {
       return stub.fetch(request);
     }
     
-    // If not, serve the HTML page
+    // if not, serve the HTML page
     return new Response(HTML, {
       headers: { "Content-Type": "text/html" }
     });

@@ -4,9 +4,14 @@ compatibility_date = "2023-12-01"
 
 [durable_objects]
 bindings = [
-  { name = "chat_room", class_name = "ChatRoom" }
+  { name = "chat_room", class_name = "ChatRoom" },
+  { name = "global_registry", class_name = "GlobalRegistry" }
 ]
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["GlobalRegistry"]
