@@ -39,7 +39,46 @@ export class ChatRoom {
     return data.count;
   }
 
+  async registryRegisterRoom(roomid) {
+    const stub = this.getRegistryStub();
+    await stub.fetch("https://registry/", {
+      method: "POST",
+      body: JSON.stringify({ action: "registerroom", roomid })
+    });
+  }
+  async getAllRoomIds() {
+    const stub = this.getRegistryStub();
+    const res = await stub.fetch("https://registry/", {
+      method: "POST",
+      body: JSON.stringify({ action: "getrooms" })
+    });
+    const data = await res.json();
+    return data.rooms;
+  }
+  async broadcastToAllRooms(msg) {
+    const roomids = await this.getAllRoomIds();
+    await Promise.all(roomids.map(async (rid) => {
+      const id = this.env.chat_room.idFromName(rid);
+      const stub = this.env.chat_room.get(id);
+      try {
+        await stub.fetch("https://internal/broadcast", {
+          method: "POST",
+          body: msg
+        });
+      } catch (e) {}
+    }));
+  }
+
   async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/broadcast") {
+      const msg = await request.text();
+      for (const c of this.clients) {
+        try { c.socket.send(msg); } catch (e) {}
+      }
+      return new Response("ok");
+    }
+
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
       return new Response('expected WebSocket', { status: 426 });
@@ -115,7 +154,6 @@ export class ChatRoom {
   }
 
   handleChatMessage(data, username) {
-
     // this is against nasty individuals who try to sneak in malicious code or sum shit
     let imageURL = null;
     if (data.imageURL) {
@@ -158,8 +196,9 @@ export class ChatRoom {
     let username = data.username;
     const joincount = this.clients.length
 
-    username = username.trim().slice(0, 20); // 31 character limit
-    if (!username || username.length === 0 || username.includes("<") || username.includes(">")) {
+    const bannedcharacters = ["<", ">", " "]
+    username = username.trim().slice(0, 20); // 20 character limit
+    if (!username || bannedcharacters.some(ch => username.includes(ch))) {
       username = `anon-${joincount}`;
     }
     const roomid = data.roomid;
@@ -174,6 +213,7 @@ export class ChatRoom {
     }
 
     await this.registryIncrement();
+    await this.registryRegisterRoom(roomid);
 
     console.log(username + " joined")
     server.send(JSON.stringify(await executecommand("count", this, data, server, username, roomid, MAXCLIENTSPERROOM)))
@@ -186,11 +226,7 @@ export class ChatRoom {
       timestamp: new Date().toISOString()
     });
 
-    for (let c of this.clients) { 
-      try { 
-        c.socket.send(msg);
-      } catch (e) {}
-    }
+    await this.broadcastToAllRooms(msg)
 
     return { username, roomid, hiddenroom };
   }
@@ -199,22 +235,17 @@ export class ChatRoom {
     const clientObj = this.clients.find(c => c.socket === server);
     if (clientObj && clientObj.registered) {
       await this.registryDecrement();
-    }
+      // remove username from database
 
-    console.log(username + " left")
-    const leftroomid = hiddenroom ? "[hidden]" : roomid;
-    const msg = JSON.stringify({
-      type: "system",
-      message: `${username} left ${leftroomid}`,
-      timestamp: new Date().toISOString()
-    });
+      console.log(username + " left")
+      const leftroomid = hiddenroom ? "[hidden]" : roomid;
+      const msg = JSON.stringify({
+        type: "system",
+        message: `${username} left ${leftroomid}`,
+        timestamp: new Date().toISOString()
+      });
 
-    for (let c of this.clients) {
-      if (c.socket !== server) {
-        try { 
-          c.socket.send(msg);
-        } catch (e) {}
-      }
+      await this.broadcastToAllRooms(msg);2
     }
 
     this.clients = this.clients.filter(c => c.socket !== server);
